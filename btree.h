@@ -62,6 +62,12 @@ class BTreeIndex {
   ERROR_T      DisplayInternal(const SIZE_T &node,
 			       ostream &o, 
 			       const BTreeDisplayType display_type=BTREE_DEPTH) const;
+
+  ERROR_T BTreeIndex::SplitInternal(const SIZE_T &node, const KEY_T &key, const VALUE_T &value);
+  // The function to split a leaf node
+  ERROR_T BTreeIndex::SplitLeaf(const SIZE_T &node, const KEY_T &key, const VALUE_T &value);
+  // The helper function for insert. Can be called recursively.
+  ERROR_T BTreeIndex::InsertHelper(const SIZE_T &node, const KEY_T &key, const VALUE_T &value);
 public:
   //
   // keysize and valueszie should be stored in the 
