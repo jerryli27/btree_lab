@@ -1,4 +1,5 @@
 #include <assert.h>
+#include <string.h> //Used for memmove
 #include "btree.h"
 
 KeyValuePair::KeyValuePair()
