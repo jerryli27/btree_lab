@@ -394,7 +394,7 @@ ERROR_T BTreeIndex::SplitInternal(const SIZE_T &node, const KEY_T &key, const VA
     rc=b.GetPtr(offset,ptr);
     if (rc) { return rc; }
     // Allocate a new node. (The left node)
-    rc=AllocateNode(&xl_ptr);
+    rc=AllocateNode(xl_ptr);
     if (rc) { return rc; }
     rc=xl_node.Unserialize(buffercache,xl_ptr);
     if (rc) { return rc; }
@@ -416,7 +416,7 @@ ERROR_T BTreeIndex::SplitInternal(const SIZE_T &node, const KEY_T &key, const VA
 
     //allocate right node
     // Allocate a new node. (The left node)
-    rc=AllocateNode(&xr_ptr);
+    rc=AllocateNode(xr_ptr);
     if (rc) { return rc; }
     rc=xl_node.Unserialize(buffercache,xr_ptr);
     if (rc) { return rc; }
@@ -494,11 +494,11 @@ ERROR_T BTreeIndex::InsertHelper(const SIZE_T &node, const KEY_T &key, const VAL
         // we've found the place to insert the key and value
         if (key<testkey || testkey==key) { 
           //WRITE ME
-          if (b.GetNumSlotsAsLeaf()==0){
-            SplitLeaf(node);
+          if (b.info.GetNumSlotsAsLeaf()==0){
+            SplitLeaf(node,key,value);
           }else{
             // Move the memory after the insertion place one forward.
-            memmove(b.data+(keysize+valuesize)*offset+sizeof(SIZE_T),b.data+(keysize+valuesize)*(offset+1)+sizeof(SIZE_T),b.GetNumDataBytes()-sizeof(SIZE_T)-(keysize+valuesize)*offset);
+            memmove(b.data+(b.info.keysize+b.info.valuesize)*offset+sizeof(SIZE_T),b.data+(b.info.keysize+b.info.valuesize)*(offset+1)+sizeof(SIZE_T),b.info.GetNumDataBytes()-sizeof(SIZE_T)-(b.info.keysize+b.info.valuesize)*offset);
             b.SetKey(offset,key);
             b.SetVal(offset,value);
           }
