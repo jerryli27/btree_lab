@@ -496,7 +496,7 @@ ERROR_T BTreeIndex::InsertHelper(const SIZE_T &node, const KEY_T &key, const VAL
       if (b.info.numkeys>0) { 
         if (b.info.nodetype==BTREE_ROOT_NODE && b.info.numkeys==1){
           //special situation when the node only have one leaf node as the child.
-          rc=b.GetPtr(0,ptr);
+          rc=b.GetVal(0,ptr);
           if (rc) { return rc; }
           std::cout<<"Special situation. Node: "<<ptr<<std::endl;
           // Now the ptr is 0 for some reason..
