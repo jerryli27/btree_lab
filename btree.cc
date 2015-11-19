@@ -356,8 +356,8 @@ ERROR_T BTreeIndex::Lookup(const KEY_T &key, VALUE_T &value)
 }
 
 
-// The function to create a new leaf node
-ERROR_T BTreeIndex::CreateLeafNode(SIZE_T &ptr){
+// The function to create a new leaf node in one disk write
+ERROR_T BTreeIndex::CreateLeafNode(SIZE_T &ptr, const KEY_T &key, const VALUE_T &value){
   BTreeNode node;
   ERROR_T rc;
   // Allocate a new node. NOTE that AllocateNode cannot take const SIZE_T as an argument.
@@ -366,6 +366,13 @@ ERROR_T BTreeIndex::CreateLeafNode(SIZE_T &ptr){
   rc=node.Unserialize(buffercache,ptr);
   if (rc) { return rc; }
   node.info.nodetype=BTREE_LEAF_NODE;
+  //Insert the key and value into the newleaf. NOTE, hav eto do numkeys++ before setting key or value.
+  node.info.numkeys=1;
+  node.SetKey(0,key);
+  node.SetVal(0,value);
+
+  rc=node.Serialize(buffercache,ptr);
+  if (rc) { return rc; }
   return ERROR_NOERROR;
 }
 
@@ -510,17 +517,7 @@ ERROR_T BTreeIndex::InsertHelper(const SIZE_T &node, const KEY_T &key, const VAL
         // Therefore we need to create a new leaf node and insert that.
         rc=CreateLeafNode(ptr);
         if (rc) { return rc; }
-        BTreeNode newLeaf;
-        rc= newLeaf.Unserialize(buffercache,ptr);
-        if (rc) { return rc; }
-        //Insert the key and value into the newleaf. NOTE, hav eto do numkeys++ before setting key or value.
-        std::cout<<newLeaf.info.numkeys<<std::endl;
-        newLeaf.info.numkeys=1;
-        std::cout<<newLeaf.info.numkeys<<std::endl;
-        newLeaf.SetKey(0,key);
-        newLeaf.GetKey(0,testkey);
-        std::cout<<"testkey: "<<testkey<<std::endl;
-        newLeaf.SetVal(0,value);
+        
         // Append the newleaf to the root and add one to root's numkeys.
         b.info.numkeys=1;
         b.SetKey(0,key);
@@ -528,8 +525,7 @@ ERROR_T BTreeIndex::InsertHelper(const SIZE_T &node, const KEY_T &key, const VAL
         std::cout<<"testkey: "<<testkey<<std::endl;
         b.SetPtr(0,ptr);
         std::cout<<"ptr: "<<ptr<<std::endl;
-        // Need to serialize after changing value?
-        newLeaf.Serialize(buffercache,ptr);
+        // Need to serialize after changing value. 
         b.Serialize(buffercache,node);
         return ERROR_NOERROR;
       }
