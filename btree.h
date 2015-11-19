@@ -63,7 +63,7 @@ class BTreeIndex {
 			       ostream &o, 
 			       const BTreeDisplayType display_type=BTREE_DEPTH) const;
   // The function to create a new leaf node
-  ERROR_T CreateLeafNode(SIZE_T &ptr);
+  ERROR_T CreateLeafNode(SIZE_T &ptr, const KEY_T &key, const VALUE_T &value;
 
   ERROR_T SplitInternal(const SIZE_T &node, const KEY_T &key, const VALUE_T &value);
   // The function to split a leaf node

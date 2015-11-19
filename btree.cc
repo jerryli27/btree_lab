@@ -515,7 +515,7 @@ ERROR_T BTreeIndex::InsertHelper(const SIZE_T &node, const KEY_T &key, const VAL
       } else {
         // There are no keys at all on this node, so nowhere to go
         // Therefore we need to create a new leaf node and insert that.
-        rc=CreateLeafNode(ptr);
+        rc=CreateLeafNode(ptr,key,value);
         if (rc) { return rc; }
         
         // Append the newleaf to the root and add one to root's numkeys.
