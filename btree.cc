@@ -539,7 +539,7 @@ ERROR_T BTreeIndex::Insert(const KEY_T &key, const VALUE_T &value)
   //            Note that the [m/2]th key J is not placed in xl or xr, but is used to be a key in parent node
   //            Make J the parent of xl and xr, and push j together with its child pointers(to xl) into the parent of x. 
   std::cout<<"Step 1"<<std::endl;
-  return InsertHelper(superblock_index,key,value);
+  return InsertHelper(superblock_index+1,key,value);
 }
 
   
