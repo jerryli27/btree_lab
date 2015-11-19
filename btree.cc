@@ -489,7 +489,6 @@ ERROR_T BTreeIndex::InsertHelper(const SIZE_T &node, const KEY_T &key, const VAL
           // this one, if it exists
           rc=b.GetPtr(offset,ptr);
           if (rc) { return rc; }
-          std::cout<<"Special situation. Node: "<<ptr<<std::endl;
           return InsertHelper(ptr, key,value);
         }
       }
@@ -499,6 +498,8 @@ ERROR_T BTreeIndex::InsertHelper(const SIZE_T &node, const KEY_T &key, const VAL
           //special situation when the node only have one leaf node as the child.
           rc=b.GetPtr(0,ptr);
           if (rc) { return rc; }
+          std::cout<<"Special situation. Node: "<<ptr<<std::endl;
+          // Now the ptr is 0 for some reason..
           return InsertHelper(ptr, key,value);
         }
         rc=b.GetPtr(b.info.numkeys,ptr);
@@ -518,16 +519,17 @@ ERROR_T BTreeIndex::InsertHelper(const SIZE_T &node, const KEY_T &key, const VAL
         std::cout<<newLeaf.info.numkeys<<std::endl;
         newLeaf.SetKey(0,key);
         newLeaf.GetKey(0,testkey);
-        std::cout<<testkey<<std::endl;
+        std::cout<<"testkey: "<<testkey<<std::endl;
         newLeaf.SetVal(0,value);
-        // Need to serialize after changing value?
-        newLeaf.Serialize(buffercache,ptr);
         // Append the newleaf to the root and add one to root's numkeys.
         b.info.numkeys=1;
         b.SetKey(0,key);
         b.GetKey(0,testkey);
-        std::cout<<testkey<<std::endl;
+        std::cout<<"testkey: "<<testkey<<std::endl;
         b.SetVal(0,ptr);
+        std::cout<<"ptr: "<<ptr<<std::endl;
+        // Need to serialize after changing value?
+        newLeaf.Serialize(buffercache,ptr);
         b.Serialize(buffercache,node);
         return ERROR_NOERROR;
       }

@@ -13,8 +13,9 @@ int main(int argc, char **argv)
   SIZE_T cachesize;
   SIZE_T superblocknum;
   char *key, *value;
+  bool newTree;
 
-  if (argc!=5) { 
+  if (argc!=6) { //5
     usage();
     return -1;
   }
@@ -23,6 +24,7 @@ int main(int argc, char **argv)
   cachesize=atoi(argv[2]);
   key=argv[3];
   value=argv[4];
+  newTree=argv[5];
 
   DiskSystem disk(filestem);
   BufferCache cache(&disk,cachesize);
@@ -36,7 +38,7 @@ int main(int argc, char **argv)
     return -1;
   }
 
-  if ((rc=btree.Attach(0,false))!=ERROR_NOERROR) { 
+  if ((rc=btree.Attach(0,newTree))!=ERROR_NOERROR) { 
     cerr << "Can't attach to index  due to error "<<rc<<endl;
     return -1;
   } else {
