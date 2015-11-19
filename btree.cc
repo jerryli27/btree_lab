@@ -359,6 +359,7 @@ ERROR_T BTreeIndex::Lookup(const KEY_T &key, VALUE_T &value)
 // The function to create a new leaf node
 ERROR_T BTreeIndex::CreateLeafNode(const SIZE_T &ptr){
   BTreeNode node;
+  ERROR_T rc;
   // Allocate a new node.
   rc=AllocateNode(ptr);
   if (rc) { return rc; }
