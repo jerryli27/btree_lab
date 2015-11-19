@@ -524,8 +524,7 @@ ERROR_T BTreeIndex::InsertHelper(const SIZE_T &node, const KEY_T &key, const VAL
         std::cout<<"testkey: "<<testkey<<std::endl;
         b.SetPtr(0,ptr);
         std::cout<<"ptr: "<<ptr<<std::endl;
-        // Need to serialize after changing value?
-        newLeaf.Serialize(buffercache,ptr);
+        // Need to serialize after changing value
         b.Serialize(buffercache,node);
         return ERROR_NOERROR;
       }
