@@ -494,6 +494,12 @@ ERROR_T BTreeIndex::InsertHelper(const SIZE_T &node, const KEY_T &key, const VAL
       }
       // if we got here, we need to go to the next pointer, if it exists
       if (b.info.numkeys>0) { 
+        if (b.info.nodetype==BTREE_ROOT_NODE && b.info.numkeys==1){
+          //special situation when the node only have one leaf node as the child.
+          rc=b.GetPtr(0,ptr);
+          if (rc) { return rc; }
+          return InsertHelper(ptr, key,value);
+        }
         rc=b.GetPtr(b.info.numkeys,ptr);
         if (rc) { return rc; }
         return InsertHelper(ptr, key,value);
