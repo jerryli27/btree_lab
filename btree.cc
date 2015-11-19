@@ -506,12 +506,18 @@ ERROR_T BTreeIndex::InsertHelper(const SIZE_T &node, const KEY_T &key, const VAL
         rc= newLeaf.Unserialize(buffercache,ptr);
         if (rc) { return rc; }
         //Insert the key and value into the newleaf. NOTE, hav eto do numkeys++ before setting key or value.
+        std::cout<<b.info.numkeys<<std::endl;
         newLeaf.info.numkeys++;
+        std::cout<<b.info.numkeys<<std::endl;
         newLeaf.SetKey(0,key);
+        newLeaf.GetKey(0,testkey);
+        std::cout<<testkey<<std::endl;
         newLeaf.SetVal(0,value);
         // Append the newleaf to the root and add one to root's numkeys.
         b.info.numkeys++;
         b.SetKey(0,key);
+        b.GetKey(0,testkey);
+        std::cout<<testkey<<std::endl;
         b.SetVal(0,ptr);
         return ERROR_NOERROR;
       }
