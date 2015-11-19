@@ -496,6 +496,7 @@ ERROR_T BTreeIndex::InsertHelper(const SIZE_T &node, const KEY_T &key, const VAL
       if (b.info.numkeys>0) { 
         if (b.info.nodetype==BTREE_ROOT_NODE && b.info.numkeys==1){
           //special situation when the node only have one leaf node as the child.
+          //Get the stored pointer to the next leaf node.
           rc=b.GetVal(0,ptr);
           if (rc) { return rc; }
           std::cout<<"Special situation. Node: "<<ptr<<std::endl;
