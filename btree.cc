@@ -507,14 +507,14 @@ ERROR_T BTreeIndex::InsertHelper(const SIZE_T &node, const KEY_T &key, const VAL
         if (rc) { return rc; }
         //Insert the key and value into the newleaf. NOTE, hav eto do numkeys++ before setting key or value.
         std::cout<<b.info.numkeys<<std::endl;
-        newLeaf.info.numkeys++;
+        newLeaf.info.numkeys=newLeaf.info.numkeys+1;
         std::cout<<b.info.numkeys<<std::endl;
         newLeaf.SetKey(0,key);
         newLeaf.GetKey(0,testkey);
         std::cout<<testkey<<std::endl;
         newLeaf.SetVal(0,value);
         // Append the newleaf to the root and add one to root's numkeys.
-        b.info.numkeys++;
+        b.info.numkeys=b.info.numkeys+1;
         b.SetKey(0,key);
         b.GetKey(0,testkey);
         std::cout<<testkey<<std::endl;
