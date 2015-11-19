@@ -24,7 +24,11 @@ int main(int argc, char **argv)
   cachesize=atoi(argv[2]);
   key=argv[3];
   value=argv[4];
-  newTree=argv[5];
+  if (argv[5][0]=="0"){
+    newTree=false;
+  }else{
+    newTree=true;
+  }
 
   DiskSystem disk(filestem);
   BufferCache cache(&disk,cachesize);
