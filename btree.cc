@@ -470,7 +470,7 @@ ERROR_T BTreeIndex::InsertHelper(const SIZE_T &node, const KEY_T &key, const VAL
   SIZE_T ptr;
   std::cout<<"Step 2"<<std::endl;
   rc= b.Unserialize(buffercache,node);
-  std::cout<<"Step 3"<<std::endl;
+  std::cout<<"Step 3. Node: "<<node<<std::endl;
   if (rc!=ERROR_NOERROR) { 
     return rc;
   }
@@ -489,6 +489,7 @@ ERROR_T BTreeIndex::InsertHelper(const SIZE_T &node, const KEY_T &key, const VAL
           // this one, if it exists
           rc=b.GetPtr(offset,ptr);
           if (rc) { return rc; }
+          std::cout<<"Special situation. Node: "<<ptr<<std::endl;
           return InsertHelper(ptr, key,value);
         }
       }
