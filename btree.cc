@@ -355,6 +355,19 @@ ERROR_T BTreeIndex::Lookup(const KEY_T &key, VALUE_T &value)
   return LookupOrUpdateInternal(superblock.info.rootnode, BTREE_OP_LOOKUP, key, value);
 }
 
+
+// The function to split an internal node. The input is the node, the key and the value to be inserted after/during the split
+ERROR_T BTreeIndex::CreateLeafNode(const SIZE_T &ptr){
+  BTreeNode node;
+  // Allocate a new node.
+  rc=AllocateNode(ptr);
+  if (rc) { return rc; }
+  rc=node.Unserialize(buffercache,ptr);
+  if (rc) { return rc; }
+  node.info.nodetype=BTREE_LEAF_NODE;
+  return ERROR_NOERROR;
+}
+
 // The function to split an internal node. The input is the node, the key and the value to be inserted after/during the split
 ERROR_T BTreeIndex::SplitInternal(const SIZE_T &node, const KEY_T &key, const VALUE_T &value){
   //        Splitting an internal node:
@@ -485,7 +498,15 @@ ERROR_T BTreeIndex::InsertHelper(const SIZE_T &node, const KEY_T &key, const VAL
         return InsertHelper(ptr, key,value);
       } else {
         // There are no keys at all on this node, so nowhere to go
-        return ERROR_NONEXISTENT;
+        // Therefore we need to create a new leaf node and insert that.
+        rc=CreateLeafNode(ptr);
+        if (rc) { return rc; }
+        BTreeNode newLeaf;
+        rc= newLeaf.Unserialize(buffercache,ptr);
+        if (rc) { return rc; }
+        newLeaf.SetKey(0,key);
+        newLeaf.SetVal(0,value);
+        return ERROR_NOERROR;
       }
       break;
     case BTREE_LEAF_NODE:
@@ -505,7 +526,7 @@ ERROR_T BTreeIndex::InsertHelper(const SIZE_T &node, const KEY_T &key, const VAL
             b.SetKey(offset,key);
             b.SetVal(offset,value);
           }
-          return ERROR_UNIMPL;
+          return ERROR_NOERROR;
         }
       }
       return ERROR_NONEXISTENT;
