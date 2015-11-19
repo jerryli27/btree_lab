@@ -26,6 +26,7 @@ int main(int argc, char **argv)
 
   DiskSystem disk(filestem);
   BufferCache cache(&disk,cachesize);
+  usage();
   BTreeIndex btree(0,0,&cache);
   
   ERROR_T rc;
