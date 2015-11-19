@@ -467,7 +467,6 @@ ERROR_T BTreeIndex::InsertHelper(const SIZE_T &node, const KEY_T &key, const VAL
   ERROR_T rc;
   SIZE_T offset;
   KEY_T testkey;
-  VALUE_T tempVal;
   SIZE_T ptr;
   std::cout<<"Step 2"<<std::endl;
   rc= b.Unserialize(buffercache,node);
@@ -498,11 +497,10 @@ ERROR_T BTreeIndex::InsertHelper(const SIZE_T &node, const KEY_T &key, const VAL
         if (b.info.nodetype==BTREE_ROOT_NODE && b.info.numkeys==1){
           //special situation when the node only have one leaf node as the child.
           //Get the stored pointer to the next leaf node.
-          rc=b.GetVal(0,tempVal);
+          rc=b.GetPtr(0,ptr);
           if (rc) { return rc; }
-          std::cout<<"Special situation. Node: "<<tempVal<<std::endl;
-          // Now the ptr is 0 for some reason..
-          return InsertHelper((SIZE_T)tempVal, key,value);
+          std::cout<<"Special situation. Node: "<<ptr<<std::endl;
+          return InsertHelper(ptr, key,value);
         }
         rc=b.GetPtr(b.info.numkeys,ptr);
         if (rc) { return rc; }
@@ -528,7 +526,7 @@ ERROR_T BTreeIndex::InsertHelper(const SIZE_T &node, const KEY_T &key, const VAL
         b.SetKey(0,key);
         b.GetKey(0,testkey);
         std::cout<<"testkey: "<<testkey<<std::endl;
-        b.SetVal(0,ptr);
+        b.SetPtr(0,ptr);
         std::cout<<"ptr: "<<ptr<<std::endl;
         // Need to serialize after changing value?
         newLeaf.Serialize(buffercache,ptr);
