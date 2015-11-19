@@ -513,12 +513,15 @@ ERROR_T BTreeIndex::InsertHelper(const SIZE_T &node, const KEY_T &key, const VAL
         newLeaf.GetKey(0,testkey);
         std::cout<<testkey<<std::endl;
         newLeaf.SetVal(0,value);
+        // Need to serialize after changing value?
+        newLeaf.Serialize(buffercache,ptr);
         // Append the newleaf to the root and add one to root's numkeys.
         b.info.numkeys=1;
         b.SetKey(0,key);
         b.GetKey(0,testkey);
         std::cout<<testkey<<std::endl;
         b.SetVal(0,ptr);
+        b.Serialize(buffercache,node);
         return ERROR_NOERROR;
       }
       break;
