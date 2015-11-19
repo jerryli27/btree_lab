@@ -505,14 +505,14 @@ ERROR_T BTreeIndex::InsertHelper(const SIZE_T &node, const KEY_T &key, const VAL
         BTreeNode newLeaf;
         rc= newLeaf.Unserialize(buffercache,ptr);
         if (rc) { return rc; }
-        //Insert the key and value into the newleaf
+        //Insert the key and value into the newleaf. NOTE, hav eto do numkeys++ before setting key or value.
+        newLeaf.info.numkeys++;
         newLeaf.SetKey(0,key);
         newLeaf.SetVal(0,value);
-        newLeaf.info.numkeys++;
         // Append the newleaf to the root and add one to root's numkeys.
+        b.info.numkeys++;
         b.SetKey(0,key);
         b.SetVal(0,ptr);
-        b.info.numkeys++;
         return ERROR_NOERROR;
       }
       break;
