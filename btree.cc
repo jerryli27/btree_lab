@@ -365,7 +365,7 @@ ERROR_T BTreeIndex::CreateLeafNode(SIZE_T &ptr, const KEY_T &key, const VALUE_T 
   if (rc) { return rc; }
   rc=node.Unserialize(buffercache,ptr);
   if (rc) { return rc; }
-  //node.info.nodetype=BTREE_LEAF_NODE;// This is causing a overflow.
+  node.info.nodetype=4;// This is causing a overflow.
   //Insert the key and value into the newleaf. NOTE, hav eto do numkeys++ before setting key or value.
   node.info.numkeys=1;
   node.SetKey(0,key);
