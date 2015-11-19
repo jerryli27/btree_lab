@@ -24,7 +24,7 @@ int main(int argc, char **argv)
   cachesize=atoi(argv[2]);
   key=argv[3];
   value=argv[4];
-  if (argv[5][0]=="0"){
+  if (strcmp(argv[5],"0")==0){
     newTree=false;
   }else{
     newTree=true;
