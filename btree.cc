@@ -361,7 +361,7 @@ ERROR_T BTreeIndex::CreateLeafNode(const SIZE_T &ptr){
   BTreeNode node;
   ERROR_T rc;
   // Allocate a new node.
-  rc=AllocateNode(ptr);
+  rc=AllocateNode((SIZE_T)ptr);
   if (rc) { return rc; }
   rc=node.Unserialize(buffercache,ptr);
   if (rc) { return rc; }
