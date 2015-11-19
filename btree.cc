@@ -360,7 +360,7 @@ ERROR_T BTreeIndex::Lookup(const KEY_T &key, VALUE_T &value)
 ERROR_T BTreeIndex::CreateLeafNode(SIZE_T &ptr){
   BTreeNode node;
   ERROR_T rc;
-  // Allocate a new node.
+  // Allocate a new node. NOTE that AllocateNode cannot take const SIZE_T as an argument.
   rc=AllocateNode(ptr);
   if (rc) { return rc; }
   rc=node.Unserialize(buffercache,ptr);
@@ -505,8 +505,14 @@ ERROR_T BTreeIndex::InsertHelper(const SIZE_T &node, const KEY_T &key, const VAL
         BTreeNode newLeaf;
         rc= newLeaf.Unserialize(buffercache,ptr);
         if (rc) { return rc; }
+        //Insert the key and value into the newleaf
         newLeaf.SetKey(0,key);
         newLeaf.SetVal(0,value);
+        newLeaf.info.numkeys++;
+        // Append the newleaf to the root and add one to root's numkeys.
+        b.SetKey(0,key);
+        b.SetVal(0,ptr);
+        b.info.numkeys++;
         return ERROR_NOERROR;
       }
       break;
