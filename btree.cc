@@ -356,7 +356,7 @@ ERROR_T BTreeIndex::Lookup(const KEY_T &key, VALUE_T &value)
 }
 
 
-// The function to split an internal node. The input is the node, the key and the value to be inserted after/during the split
+// The function to create a new leaf node
 ERROR_T BTreeIndex::CreateLeafNode(const SIZE_T &ptr){
   BTreeNode node;
   // Allocate a new node.
