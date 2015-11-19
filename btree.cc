@@ -1,5 +1,6 @@
 #include <assert.h>
 #include <string.h> //Used for memmove
+#include <iostream>
 #include "btree.h"
 
 KeyValuePair::KeyValuePair()
@@ -453,9 +454,9 @@ ERROR_T BTreeIndex::InsertHelper(const SIZE_T &node, const KEY_T &key, const VAL
   SIZE_T offset;
   KEY_T testkey;
   SIZE_T ptr;
-
+  std::cout<<"Step 2"<<std::endl;
   rc= b.Unserialize(buffercache,node);
-
+  std::cout<<"Step 3"<<std::endl;
   if (rc!=ERROR_NOERROR) { 
     return rc;
   }
@@ -488,6 +489,7 @@ ERROR_T BTreeIndex::InsertHelper(const SIZE_T &node, const KEY_T &key, const VAL
       }
       break;
     case BTREE_LEAF_NODE:
+      std::cout<<"Step 4"<<std::endl;
       // Scan through keys looking for matching value
       for (offset=0;offset<b.info.numkeys;offset++) { 
         rc=b.GetKey(offset,testkey);
@@ -536,6 +538,7 @@ ERROR_T BTreeIndex::Insert(const KEY_T &key, const VALUE_T &value)
   //            The difference is xl contains [m-2]-1 smallest keys and xr contains [m/2] largest keys. 
   //            Note that the [m/2]th key J is not placed in xl or xr, but is used to be a key in parent node
   //            Make J the parent of xl and xr, and push j together with its child pointers(to xl) into the parent of x. 
+  std::cout<<"Step 1"<<std::endl;
   return InsertHelper(superblock_index,key,value);
 }
 
