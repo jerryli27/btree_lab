@@ -63,13 +63,8 @@ class BTreeIndex {
 			       ostream &o, 
 			       const BTreeDisplayType display_type=BTREE_DEPTH) const;
   // The function to create a new leaf node
-  ERROR_T CreateLeafNode(SIZE_T &ptr, SIZE_T rootnode, const KEY_T &key, const VALUE_T &value);
-  // The function to create a new leaf node in one disk write. 
-  // Input includes the memory address for memmove and how many pairs
-  ERROR_T CreateLeafNode(SIZE_T &ptr, SIZE_T rootnode, char * memAddress, SIZE_T numPairsToCopy );
-  // The function to create a new leaf node in one disk write. 
-  // Input includes the memory address for memmove and how many pairs
-  ERROR_T CreateInteriorNode(SIZE_T &ptr, SIZE_T rootnode, char * memAddress, SIZE_T numPairsToCopy );
+  ERROR_T CreateLeafNode(SIZE_T &ptr, const KEY_T &key, const VALUE_T &value);
+
   ERROR_T SplitInternal(const SIZE_T &node, const KEY_T &key, const VALUE_T &value);
   // The function to split a leaf node
   ERROR_T SplitLeaf(const SIZE_T &node, const KEY_T &key, const VALUE_T &value);
