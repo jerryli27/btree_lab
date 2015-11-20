@@ -1,5 +1,4 @@
 #include <stdlib.h>
-#include <string.h>
 #include "btree.h"
 
 void usage() 
@@ -14,9 +13,8 @@ int main(int argc, char **argv)
   SIZE_T cachesize;
   SIZE_T superblocknum;
   char *key, *value;
-  bool newTree;
 
-  if (argc!=6) { //5
+  if (argc!=5) { 
     usage();
     return -1;
   }
@@ -25,15 +23,9 @@ int main(int argc, char **argv)
   cachesize=atoi(argv[2]);
   key=argv[3];
   value=argv[4];
-  if (strcmp(argv[5],"0")==0){
-    newTree=false;
-  }else{
-    newTree=true;
-  }
 
   DiskSystem disk(filestem);
   BufferCache cache(&disk,cachesize);
-  usage();
   BTreeIndex btree(0,0,&cache);
   
   ERROR_T rc;
@@ -43,7 +35,7 @@ int main(int argc, char **argv)
     return -1;
   }
 
-  if ((rc=btree.Attach(0,newTree))!=ERROR_NOERROR) { 
+  if ((rc=btree.Attach(0))!=ERROR_NOERROR) { 
     cerr << "Can't attach to index  due to error "<<rc<<endl;
     return -1;
   } else {
@@ -76,6 +68,3 @@ int main(int argc, char **argv)
     return 0;
   }
 }
-  
-
-  
