@@ -213,12 +213,12 @@ ERROR_T BTreeIndex::LookupOrUpdateInternal(const SIZE_T &node,
       rc=b.GetKey(offset,testkey);
       if (rc) {  return rc; }
       if (key<testkey || key==testkey) {
-	// OK, so we now have the first key that's larger
-	// so we ned to recurse on the ptr immediately previous to 
-	// this one, if it exists
-	rc=b.GetPtr(offset,ptr);
-	if (rc) { return rc; }
-	return LookupOrUpdateInternal(ptr,op,key,value);
+      	// OK, so we now have the first key that's larger
+      	// so we need to recurse on the ptr immediately previous to 
+      	// this one, if it exists
+      	rc=b.GetPtr(offset,ptr);
+      	if (rc) { return rc; }
+      	return LookupOrUpdateInternal(ptr,op,key,value);
       }
     }
     // if we got here, we need to go to the next pointer, if it exists
@@ -237,13 +237,13 @@ ERROR_T BTreeIndex::LookupOrUpdateInternal(const SIZE_T &node,
       rc=b.GetKey(offset,testkey);
       if (rc) {  return rc; }
       if (testkey==key) { 
-	if (op==BTREE_OP_LOOKUP) { 
-	  return b.GetVal(offset,value);
-	} else { 
-	  // BTREE_OP_UPDATE
-	  // WRITE ME
-	  return ERROR_UNIMPL;
-	}
+      	if (op==BTREE_OP_LOOKUP) { 
+      	  return b.GetVal(offset,value);
+      	} else { 
+      	  // BTREE_OP_UPDATE
+      	  // WRITE ME
+      	  return b.SetVal(offset,value);
+      	}
       }
     }
     return ERROR_NONEXISTENT;
