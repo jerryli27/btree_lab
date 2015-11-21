@@ -62,6 +62,9 @@ class BTreeIndex {
   ERROR_T      DisplayInternal(const SIZE_T &node,
 			       ostream &o, 
 			       const BTreeDisplayType display_type=BTREE_DEPTH) const;
+
+  // The function to create a new leaf node in one disk write.
+  ERROR_T CreateLeafNode(SIZE_T &ptr, SIZE_T rootnode);
   // The function to create a new leaf node
   ERROR_T CreateLeafNode(SIZE_T &ptr, SIZE_T rootnode, const KEY_T &key, const VALUE_T &value);
   // The function to create a new leaf node in one disk write. 
