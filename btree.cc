@@ -440,8 +440,9 @@ ERROR_T BTreeIndex::CreateLeafNode(SIZE_T &ptr, SIZE_T rootnode, char * memAddre
   return ERROR_NOERROR;
 }
 
-// The function to create a new leaf node in one disk write. 
+// The function to create a new interior node in one disk write. 
 // Input includes the memory address for memmove and how many pairs
+// Note, when creating an interior node, we copy from address of a pointer, and we copy numPairsToCopy+1 ptrs and numPairsToCopy keys.
 ERROR_T BTreeIndex::CreateInteriorNode(SIZE_T &ptr, SIZE_T rootnode, char * memAddress, SIZE_T numPairsToCopy ){
   
   ERROR_T rc;
@@ -459,7 +460,8 @@ ERROR_T BTreeIndex::CreateInteriorNode(SIZE_T &ptr, SIZE_T rootnode, char * memA
   node.info.rootnode=rootnode;
   //node.info.freelist=superblock_index+2;//Don't know what free list does.
   node.info.numkeys=numPairsToCopy;
-  memmove(node.ResolveKey(0),memAddress,(node.info.keysize+node.info.valuesize)*numPairsToCopy);
+  // Things we are copying: ptr, key, ptr, key... ptr, key, ptr.
+  memmove(node.ResolvePtr(0),memAddress,(sizeof(SIZE_T)+node.info.keysize)*numPairsToCopy+sizeof(SIZE_T));
             
   buffercache->NotifyAllocateBlock(ptr);
 
@@ -468,9 +470,50 @@ ERROR_T BTreeIndex::CreateInteriorNode(SIZE_T &ptr, SIZE_T rootnode, char * memA
   return ERROR_NOERROR;
 }
 
+// The function to create a new root node and append the old rootnode as the new rootnode's first pointer in 3 reads and 3 disk write
+// Input includes the memory address for memmove and how many pairs
+ERROR_T BTreeIndex::CreateNewRootNode(SIZE_T &ptr, const SIZE_T &oldrootnode){
+  
+  ERROR_T rc;
+  // Allocate a new node. NOTE that AllocateNode cannot take const SIZE_T as an argument.
+  AllocateNode(ptr);
+  //ptr=superblock.info.freelist;
 
-// The function to split an internal node. The input is the node, the key and the value to be inserted after/during the split
-ERROR_T BTreeIndex::SplitInternal(const SIZE_T &node, const KEY_T &key, const VALUE_T &value){
+  if (ptr==0) { 
+    return ERROR_NOSPACE;
+  }
+  BTreeNode node(BTREE_ROOT_NODE,
+        superblock.info.keysize,
+        superblock.info.valuesize,
+        buffercache->GetBlockSize());
+  node.info.rootnode=superblock_index;
+  //node.info.freelist=superblock_index+2;//Don't know what free list does.
+  node.info.numkeys=0;
+  node.SetPtr(0,oldrootnode);
+  buffercache->NotifyAllocateBlock(ptr);
+
+  rc=node.Serialize(buffercache,ptr);
+  if (rc) { return rc; }
+  //Writes the new rootnode's address into superblock's first pointer
+  // rc=superblock.Unserialize(buffercache,superblock_index);
+  // if (rc) { return rc; }
+  superblock.info.rootnode=ptr;
+  rc=superblock.Serialize(buffercache,superblock_index);
+  if (rc) { return rc; }
+  //Change the old root node's type to interior node.
+  BTreeNode oldroot;
+  rc=oldroot.Unserialize(buffercache,oldrootnode);
+  if (rc) { return rc; }
+  oldroot.info.nodetype=BTREE_INTERIOR_NODE;
+  oldroot.info.rootnode=ptr;
+  rc=oldroot.Serialize(buffercache,oldrootnode);
+  if (rc) { return rc; }
+  return ERROR_NOERROR;
+}
+
+
+// The function to split an internal node. The input is the node, the key and the pointer to be inserted after/during the split
+ERROR_T BTreeIndex::SplitInternal(const SIZE_T &node, const KEY_T &key, const SIZE_T &inputPtr){
   // Splitting an internal node:
   // The difference is xl contains [m-2]-1 smallest keys and xr contains [m/2] largest keys. 
   // Note that the [m/2]th key J is not placed in xl or xr, but is used to be a key in parent node
@@ -478,19 +521,19 @@ ERROR_T BTreeIndex::SplitInternal(const SIZE_T &node, const KEY_T &key, const VA
   BTreeNode b;
   ERROR_T rc;
   SIZE_T offset;
-  SIZE_T offset_keyvalue;
+  SIZE_T offset_ptr;
   KEY_T testkey;
   KeyValuePair testkeyvalue;
   SIZE_T ptr;
+  SIZE_T testptr;
   SIZE_T xl_ptr;
   SIZE_T xr_ptr;
   BTreeNode xl_node;
   BTreeNode xr_node;
   BTreeNode parentNode;
-  KEY_T xl_key;//The key used in parent node
-  KEY_T xr_key;
-  VALUE_T xl_value;
-  VALUE_T xr_value;
+  KEY_T newkey;//The key used in parent node
+  SIZE_T xl_ptrInParent;
+  SIZE_T xr_ptrInParent;
 
   rc= b.Unserialize(buffercache,node);
 
@@ -499,14 +542,20 @@ ERROR_T BTreeIndex::SplitInternal(const SIZE_T &node, const KEY_T &key, const VA
   }
   //If the block is the superblock, then that means we need to add another layer to the b-tree. 
   // i.e. add 1 to the height of b-tree
-  if (b.info.nodetype==BTREE_SUPERBLOCK){
-    return ERROR_UNIMPL;
+  if (b.info.nodetype==BTREE_ROOT_NODE){
+    SIZE_T newrootnode;
+    CreateNewRootNode(newrootnode, node);
+    rc= b.Unserialize(buffercache,node);
+    if (rc!=ERROR_NOERROR) { 
+      return rc;
+    }
   }
 
   //check whether the node is internal node
-  assert(b.info.nodetype==BTREE_ROOT_NODE || b.info.nodetype==BTREE_INTERIOR_NODE);
+  assert(b.info.nodetype==BTREE_INTERIOR_NODE);
   //check that we indeed have no free space.
-  assert(b.info.GetNumSlotsAsInterior()==0);
+  assert(b.info.GetNumSlotsAsInterior()<=b.info.numkeys);
+  offset_ptr=0;
   // Find the position to insert key and value.
   for (offset=0;offset<b.info.numkeys;offset++) { 
     rc=b.GetKey(offset,testkey);
@@ -514,63 +563,141 @@ ERROR_T BTreeIndex::SplitInternal(const SIZE_T &node, const KEY_T &key, const VA
     if (key<testkey || key==testkey) {
       // OK, so we now have the first key that's larger
       // So we record the offset and quit
-      offset_keyvalue=offset;
+      offset_ptr=offset+1;
       break;
     }
   }
-  if (offset_keyvalue<b.info.numkeys/2-1){
+  if (offset==b.info.numkeys){
+    offset_ptr=offset;
+  }
+  if (offset_ptr<(b.info.numkeys+1)/2+1){
     // If the key to be inserted is in xl
-    rc=b.GetPtr(offset,ptr);
-    if (rc) { return rc; }
 
     // Allocate right node
-    rc=CreateInteriorNode(xr_ptr, b.info.rootnode, b.ResolveKey(b.info.numkeys/2), b.info.numkeys/2);
-    b.GetKey(b.info.numkeys-1,xr_key);//Get the new key for right side
-    b.GetVal(b.info.numkeys-1,xr_value);//Get the new value for right side
+    rc=CreateInteriorNode(xr_ptr, b.info.rootnode, b.ResolvePtr(b.info.numkeys/2), b.info.numkeys/2);
+    b.GetKey((b.info.numkeys)/2-1,newkey);//Get the new key for right side
+    //b.GetPtr(b.info.numkeys/2,xr_ptrInParent);//Get the new ptr for right side
     if (rc) { return rc; }
     // Do the left node. Use the original node as the left node
+    xl_ptr=node;
     // Move the memory after the insertion place one forward.
     // void * memmove ( void * destination, const void * source, size_t num );
-    memmove(b.ResolveKey(offset_keyvalue+1),b.ResolveKey(offset_keyvalue),(b.info.keysize+sizeof(SIZE_T))*(b.info.numkeys/2-1-offset_keyvalue));
-    b.info.numkeys=b.info.numkeys/2-1;
-    b.SetKey(offset_keyvalue,key);
-    b.SetVal(offset_keyvalue,value);
-    b.GetKey(b.info.numkeys-1,xl_key);//Get the new key for left side
-    b.GetVal(b.info.numkeys-1,xl_value);//Get the new value for left side
-    b.Serialize(buffercache,node);
-
-    // Now handle the parent node. 
-    // Check whether we have enough space to insert a new node.
-    // One extra read here can maybe be prevented. But it doesnt matter that much
-    rc= parentNode.Unserialize(buffercache,b.info.rootnode);
-    if (parentNode.info.GetNumSlotsAsInterior()==0){
-      return SplitInternal(b.info.rootnode, xr_key, xr_value);
+    memmove(b.ResolveKey(offset_ptr),b.ResolveKey(offset_ptr-1),sizeof(SIZE_T)+(b.info.keysize+sizeof(SIZE_T))*(b.info.numkeys/2-offset_ptr));
+    b.info.numkeys=(b.info.numkeys+1)/2;
+    if(offset_ptr==0){
+      //Should not happen though...
+      return ERROR_INSANE;
+    }else{
+      b.SetKey(offset_ptr-1,key);
+      b.SetPtr(offset_ptr,inputPtr);
     }
-    // If there is enough space, move parent node's key one forward and insert xl and xr
+    b.Serialize(buffercache,node);
+  }else if (offset_ptr==(b.info.numkeys+1)/2+1){
+    // If the key to be inserted is the [m/2]th key, which is in neither xl or xr (It's stored in leaf node but is not a key in the current internal node)
+    
+    //left side have (b.info.numkeys+1)/2+1 ptrs and (b.info.numkeys+1)/2 keys
+
+    // use the original node as the left node
+    xl_ptr=node;
+    newkey=key;
+    // Allocate the right node
+    // Allocate a new node. NOTE that AllocateNode cannot take const SIZE_T as an argument.
+    AllocateNode(xr_ptr);
+    //ptr=superblock.info.freelist;
+
+    if (xr_ptr==0) { 
+      return ERROR_NOSPACE;
+    }
+    BTreeNode xr_node(BTREE_INTERIOR_NODE,
+          superblock.info.keysize,
+          superblock.info.valuesize,
+          buffercache->GetBlockSize());
+    xr_node.info.rootnode=b.info.rootnode;
+    buffercache->NotifyAllocateBlock(xr_ptr);
+
+    xr_node.info.numkeys=(b.info.numkeys+1)/2;
+    memmove(xr_node.ResolveKey(0),b.ResolveKey(offset_ptr-1),(b.info.keysize+b.info.valuesize)*(b.info.numkeys-(offset_ptr-1)));
+    xr_node.SetPtr(0,inputPtr);
+    b.info.numkeys=(b.info.numkeys+1)/2;
+    b.Serialize(buffercache,node);
+    xr_node.Serialize(buffercache,xr_ptr);
+
+    
+  }else{
+    // If the key to be inserted is in xr
+    //left side have (b.info.numkeys+1)/2+1 ptrs and (b.info.numkeys+1)/2 keys
+
+    // use the original node as the left node
+    xl_ptr=node;
+    // the (b.info.numkeys+1)/2+1 th key is the key to be inserted into parent node. Index starts at 0 so its (b.info.numkeys+1)/2
+    b.GetKey((b.info.numkeys+1)/2,newkey);//Get the new key
+    // Allocate the right node
+    // Allocate a new node. NOTE that AllocateNode cannot take const SIZE_T as an argument.
+    AllocateNode(xr_ptr);
+    //ptr=superblock.info.freelist;
+
+    if (xr_ptr==0) { 
+      return ERROR_NOSPACE;
+    }
+    BTreeNode xr_node(BTREE_INTERIOR_NODE,
+          superblock.info.keysize,
+          superblock.info.valuesize,
+          buffercache->GetBlockSize());
+    xr_node.info.rootnode=b.info.rootnode;
+    buffercache->NotifyAllocateBlock(xr_ptr);
+
+    xr_node.info.numkeys=(b.info.numkeys+1)/2;
+    // void * memmove ( void * destination, const void * source, size_t num );
+    memmove(xr_node.ResolvePtr(0),b.ResolvePtr((b.info.numkeys+1)/2+1),sizeof(SIZE_T)+(b.info.keysize+sizeof(SIZE_T))*(offset_ptr-1-((b.info.numkeys+1)/2)));
+    if (offset_ptr<b.info.numkeys)
+      memmove(xr_node.ResolveKey(offset_ptr-((b.info.numkeys+1)/2+1)),b.ResolveKey(offset_ptr-1),(b.info.keysize+b.info.valuesize)*(b.info.numkeys-(offset_ptr-1)));
+
+    xr_node.SetKey(offset_ptr-((b.info.numkeys+1)/2+1),key);
+    xr_node.SetPtr(offset_ptr-((b.info.numkeys+1)/2+1)+1,inputPtr);
+    b.info.numkeys=(b.info.numkeys+1)/2;
+    b.Serialize(buffercache,node);
+    xr_node.Serialize(buffercache,xr_ptr);
+
+  }
+  // Now handle the parent node. 
+  // Check whether we have enough space to insert a new node.
+  // One extra read here can maybe be prevented. But it doesnt matter that much
+  rc= parentNode.Unserialize(buffercache,b.info.rootnode);
+  if (parentNode.info.GetNumSlotsAsInterior()==parentNode.info.numkeys){
+    return SplitInternal(b.info.rootnode, newkey, xr_ptr);
+  }
+  // If there is enough space, move parent node's key one forward and insert xl and xr
+  if (parentNode.info.numkeys==0){
+    offset_ptr=1;
+  }else{
+    offset_ptr=0;
     for (offset=0;offset<parentNode.info.numkeys;offset++) { 
       rc=parentNode.GetKey(offset,testkey);
       if (rc) {  return rc; }
-      if (xr_key<testkey || xr_key==testkey) {
+      if (newkey<testkey || newkey==testkey) {
         // OK, so we now have the first key that's larger
         // So we record the offset and quit
-        offset_keyvalue=offset;
+        offset_ptr=offset+1;
         break;
       }
     }
-    memmove(parentNode.ResolveKey(offset_keyvalue+1),parentNode.ResolveKey(offset_keyvalue),(parentNode.info.keysize+sizeof(SIZE_T))*(parentNode.info.numkeys-offset_keyvalue));
-    parentNode.info.numkeys++;
-    parentNode.SetKey(offset_keyvalue,xr_key);
-    parentNode.SetVal(offset_keyvalue,xr_value);
-    parentNode.Serialize(buffercache,b.info.rootnode);
-    return ERROR_NOERROR;
-    
-
-  }else if (offset_keyvalue==b.info.numkeys/2-1){
-    // If the key to be inserted is the [m/2]th key, which is in neither xl or xr (It's stored in leaf node but is not a key in the current internal node)
-  }else{
-    // If the key to be inserted is in xr
+    if (offset==parentNode.info.numkeys){
+      offset_ptr=offset;
+    }
+    if (offset_ptr==0){
+      return ERROR_INSANE;
+    }
+    if (parentNode.info.numkeys!=offset_ptr){
+      // void * memmove ( void * destination, const void * source, size_t num );
+      memmove(parentNode.data+sizeof(SIZE_T)+(offset_ptr)*(sizeof(SIZE_T)+parentNode.info.keysize),parentNode.data+sizeof(SIZE_T)+(offset_ptr-1)*(sizeof(SIZE_T)+parentNode.info.keysize),(parentNode.info.keysize+sizeof(SIZE_T))*(parentNode.info.numkeys-offset_ptr));
+    }
   }
-  return ERROR_UNIMPL;
+  parentNode.info.numkeys++;
+  parentNode.SetKey(offset_ptr-1,newkey);
+  parentNode.SetPtr(offset_ptr-1,xl_ptr);
+  parentNode.SetPtr(offset_ptr,xr_ptr);
+  parentNode.Serialize(buffercache,b.info.rootnode);
+  return ERROR_NOERROR;
 }
 
 // The function to split a leaf node
@@ -641,95 +768,75 @@ ERROR_T BTreeIndex::SplitLeaf(const SIZE_T &node, const KEY_T &key, const VALUE_
     b.Serialize(buffercache,node);
     //No bug until here
 
-    // Now handle the parent node. 
-    // Check whether we have enough space to insert a new node.
-    // One extra read here can maybe be prevented. But it doesnt matter that much
-    rc= parentNode.Unserialize(buffercache,b.info.rootnode);
-    if (parentNode.info.GetNumSlotsAsInterior()==parentNode.info.numkeys){
-      return SplitInternal(b.info.rootnode, xr_key, xr_value);
-    }
-    // If there is enough space, move parent node's key one forward and insert xl and xr
-    offset_keyvalue=0;
-    for (offset=0;offset<parentNode.info.numkeys;offset++) { 
-      rc=parentNode.GetKey(offset,testkey);
-      if (rc) {  return rc; }
-      if (xr_key<testkey || xr_key==testkey) {
-        // OK, so we now have the first key that's larger
-        // So we record the offset and quit
-        offset_keyvalue=offset;
-        break;
-      }
-    }
-    if (offset==parentNode.info.numkeys){
-      offset_keyvalue=offset;
-    }
-    if (parentNode.info.numkeys!=offset_keyvalue){
-      // void * memmove ( void * destination, const void * source, size_t num );
-      memmove(parentNode.data+sizeof(SIZE_T)+(offset_keyvalue+1)*(sizeof(SIZE_T)+parentNode.info.keysize),parentNode.data+sizeof(SIZE_T)+offset_keyvalue*(sizeof(SIZE_T)+parentNode.info.keysize),(parentNode.info.keysize+sizeof(SIZE_T))*(parentNode.info.numkeys-offset_keyvalue));
-    }
-    parentNode.info.numkeys++;
-    parentNode.SetKey(offset_keyvalue,xr_key);
-    parentNode.SetPtr(offset_keyvalue+1,xl_ptr);
-    parentNode.SetPtr(offset_keyvalue+1,xr_ptr);
-    parentNode.Serialize(buffercache,b.info.rootnode);
-    return ERROR_NOERROR;
-    
-
   }else{
     // If the key to be inserted is in xr
 
-    // Allocate left node
-    rc=CreateLeafNode(xl_ptr, b.info.rootnode, b.ResolveKey(0), b.info.numkeys/2+1);
+    // use the original node as the left node
+    xl_ptr=node;
     b.GetKey(0,xl_key);//Get the new key for left side, which is the smallest key on the left half.
     b.GetVal(0,xl_value);//Get the new value for left side
-    if (rc) { return rc; }
-    // Do the right node. Use the original node as the right node
-    // Move the memory after the insertion place one forward.
-    // void * memmove ( void * destination, const void * source, size_t num );
-    xr_ptr=node;
-    memmove(b.ResolveKey(0),b.ResolveKey(b.info.numkeys/2+1),(b.info.keysize+b.info.valuesize)*(offset_keyvalue-b.info.numkeys/2-1));
-    if (offset_keyvalue<b.info.numkeys)
-      memmove(b.ResolveKey(offset_keyvalue-b.info.numkeys/2),b.ResolveKey(offset_keyvalue),(b.info.keysize+b.info.valuesize)*(b.info.numkeys-offset_keyvalue));
-    b.info.numkeys=b.info.numkeys/2+1;
-    b.SetKey(offset_keyvalue-b.info.numkeys/2-1,key);
-    b.SetVal(offset_keyvalue-b.info.numkeys/2-1,value);
-    b.GetKey(0,xr_key);//Get the new key for right side
-    b.GetVal(0,xr_value);//Get the new value for right side
-    b.Serialize(buffercache,node);
+    // Allocate the right node
+    // Allocate a new node. NOTE that AllocateNode cannot take const SIZE_T as an argument.
+    AllocateNode(xr_ptr);
+    //ptr=superblock.info.freelist;
 
-    // Now handle the parent node. 
-    // Check whether we have enough space to insert a new node.
-    // One extra read here can maybe be prevented. But it doesnt matter that much
-    rc= parentNode.Unserialize(buffercache,b.info.rootnode);
-    if (parentNode.info.GetNumSlotsAsInterior()==parentNode.info.numkeys){
-      return SplitInternal(b.info.rootnode, xr_key, xr_value);
+    if (xr_ptr==0) { 
+      return ERROR_NOSPACE;
     }
-    // If there is enough space, move parent node's key one forward and insert xl and xr
-    for (offset=0;offset<parentNode.info.numkeys;offset++) { 
-      rc=parentNode.GetKey(offset,testkey);
-      if (rc) {  return rc; }
-      if (xr_key<testkey || xr_key==testkey) {
-        // OK, so we now have the first key that's larger
-        // So we record the offset and quit
-        offset_keyvalue=offset;
-        break;
-      }
-    }
-    if (offset==parentNode.info.numkeys){
-      offset_keyvalue=offset;
-    }
-    if (parentNode.info.numkeys!=offset_keyvalue){
-      // void * memmove ( void * destination, const void * source, size_t num );
-      memmove(parentNode.data+sizeof(SIZE_T)+(offset_keyvalue+1)*(sizeof(SIZE_T)+parentNode.info.keysize),parentNode.data+sizeof(SIZE_T)+offset_keyvalue*(sizeof(SIZE_T)+parentNode.info.keysize),(parentNode.info.keysize+sizeof(SIZE_T))*(parentNode.info.numkeys-offset_keyvalue));
-    }
-    parentNode.info.numkeys++;
-    parentNode.SetKey(offset_keyvalue,xr_key);
-    parentNode.SetPtr(offset_keyvalue+1,xl_ptr);
-    parentNode.SetPtr(offset_keyvalue+1,xr_ptr);
-    parentNode.Serialize(buffercache,b.info.rootnode);
-    return ERROR_NOERROR;
+    BTreeNode xr_node(BTREE_LEAF_NODE,
+          superblock.info.keysize,
+          superblock.info.valuesize,
+          buffercache->GetBlockSize());
+    xr_node.info.rootnode=b.info.rootnode;
+    buffercache->NotifyAllocateBlock(xr_ptr);
+
+    // void * memmove ( void * destination, const void * source, size_t num );
+    xr_node.info.numkeys=b.info.numkeys/2+1;
+    memmove(xr_node.ResolveKey(0),b.ResolveKey(b.info.numkeys/2+1),(b.info.keysize+b.info.valuesize)*(offset_keyvalue-b.info.numkeys/2-1));
+    if (offset_keyvalue<b.info.numkeys)
+      memmove(xr_node.ResolveKey(offset_keyvalue-b.info.numkeys/2),b.ResolveKey(offset_keyvalue),(b.info.keysize+b.info.valuesize)*(b.info.numkeys-offset_keyvalue));
+    
+    xr_node.SetKey(offset_keyvalue-b.info.numkeys/2-1,key);
+    xr_node.SetVal(offset_keyvalue-b.info.numkeys/2-1,value);
+    xr_node.GetKey(0,xr_key);//Get the new key for right side
+    xr_node.GetVal(0,xr_value);//Get the new value for right side
+    b.info.numkeys=b.info.numkeys/2+1;
+    b.Serialize(buffercache,node);
+    xr_node.Serialize(buffercache,xr_ptr);
+
   }
-  return ERROR_UNIMPL;
+  // Now handle the parent node. 
+  // Check whether we have enough space to insert a new node.
+  // One extra read here can maybe be prevented. But it doesnt matter that much
+  rc= parentNode.Unserialize(buffercache,b.info.rootnode);
+  if (parentNode.info.GetNumSlotsAsInterior()==parentNode.info.numkeys){
+    return SplitInternal(b.info.rootnode, xr_key, xr_ptr);
+  }
+  // If there is enough space, move parent node's key one forward and insert xl and xr
+  offset_keyvalue=0;
+  for (offset=0;offset<parentNode.info.numkeys;offset++) { 
+    rc=parentNode.GetKey(offset,testkey);
+    if (rc) {  return rc; }
+    if (xr_key<testkey || xr_key==testkey) {
+      // OK, so we now have the first key that's larger
+      // So we record the offset and quit
+      offset_keyvalue=offset;
+      break;
+    }
+  }
+  if (offset==parentNode.info.numkeys){
+    offset_keyvalue=offset;
+  }
+  if (parentNode.info.numkeys!=offset_keyvalue){
+    // void * memmove ( void * destination, const void * source, size_t num );
+    memmove(parentNode.data+sizeof(SIZE_T)+(offset_keyvalue+1)*(sizeof(SIZE_T)+parentNode.info.keysize),parentNode.data+sizeof(SIZE_T)+offset_keyvalue*(sizeof(SIZE_T)+parentNode.info.keysize),(parentNode.info.keysize+sizeof(SIZE_T))*(parentNode.info.numkeys-offset_keyvalue));
+  }
+  parentNode.info.numkeys++;
+  parentNode.SetKey(offset_keyvalue,xr_key);
+  parentNode.SetPtr(offset_keyvalue,xl_ptr);
+  parentNode.SetPtr(offset_keyvalue+1,xr_ptr);
+  parentNode.Serialize(buffercache,b.info.rootnode);
+  return ERROR_NOERROR;
 }
 
 
@@ -749,6 +856,8 @@ ERROR_T BTreeIndex::InsertHelper(const SIZE_T &node, const KEY_T &key, const VAL
   }
 
   switch (b.info.nodetype) { 
+    case BTREE_SUPERBLOCK:
+      return InsertHelper(b.info.rootnode, key,value);
     case BTREE_ROOT_NODE:
     case BTREE_INTERIOR_NODE:
       // Scan through key/ptr pairs
@@ -797,10 +906,10 @@ ERROR_T BTreeIndex::InsertHelper(const SIZE_T &node, const KEY_T &key, const VAL
           if (b.info.GetNumSlotsAsLeaf()==b.info.numkeys){
             return SplitLeaf(node,key,value);
           }else{
-            // Move the memory after the insertion place one forward.
-            b.info.numkeys++;
             //void * memmove ( void * destination, const void * source, size_t num );
             memmove(b.ResolveKey(offset+1),b.ResolveKey(offset),(b.info.keysize+b.info.valuesize)*(b.info.numkeys-offset));
+            // Move the memory after the insertion place one forward.
+            b.info.numkeys++;
             b.SetKey(offset,key);
             b.SetVal(offset,value);
           }
@@ -850,6 +959,10 @@ ERROR_T BTreeIndex::Insert(const KEY_T &key, const VALUE_T &value)
   //            Note that the [m/2]th key J is not placed in xl or xr, but is used to be a key in parent node
   //            Make J the parent of xl and xr, and push j together with its child pointers(to xl) into the parent of x. 
   std::cout<<"Step 1"<<std::endl;
+  std::cout<<"displaying node"<<std::endl;
+  Display(cerr , BTREE_DEPTH_DOT);
+
+  std::cout<<"displaying ends"<<std::endl;
   // BTreeNode b;
   // ERROR_T rc;
   // SIZE_T ptr;
@@ -859,7 +972,7 @@ ERROR_T BTreeIndex::Insert(const KEY_T &key, const VALUE_T &value)
   // if (rc) { return rc; }
   // // Append the newleaf to the root's first pointer
   // newrootnode.SetPtr(0,ptr);
-  return InsertHelper(superblock_index+1,key,value);
+  return InsertHelper(superblock_index,key,value);
 }
 
   

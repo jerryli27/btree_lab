@@ -73,7 +73,11 @@ class BTreeIndex {
   // The function to create a new leaf node in one disk write. 
   // Input includes the memory address for memmove and how many pairs
   ERROR_T CreateInteriorNode(SIZE_T &ptr, SIZE_T rootnode, char * memAddress, SIZE_T numPairsToCopy );
-  ERROR_T SplitInternal(const SIZE_T &node, const KEY_T &key, const VALUE_T &value);
+
+  // The function to create a new root node and append the old rootnode as the new rootnode's first pointer in 3 reads and 3 disk write
+  ERROR_T CreateNewRootNode(SIZE_T &ptr, const SIZE_T &oldrootnode);
+  // The function to split an internal node. The input is the node, the key and the pointer to be inserted after/during the split
+  ERROR_T SplitInternal(const SIZE_T &node, const KEY_T &key, const SIZE_T &inputPtr);
   // The function to split a leaf node
   ERROR_T SplitLeaf(const SIZE_T &node, const KEY_T &key, const VALUE_T &value);
   // The helper function for insert. Can be called recursively.
