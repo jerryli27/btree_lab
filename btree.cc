@@ -728,7 +728,7 @@ ERROR_T BTreeIndex::SanityCheck() const
       // if all nodes are leaf, check if in order, then terminate
       std::set<SIZE_T> s; // contains the types of nodes in a level 
       std::vector<VALUE_T> v;
-      for (int i=0; i<Q.size(); i++) {
+      for (unsigned i=0; i<Q.size(); i++) {
         b.Unserialize(buffercache,Q.pop_front());
         s.insert(b.info.nodetype);
         switch (b.info.nodetype) {
@@ -749,7 +749,7 @@ ERROR_T BTreeIndex::SanityCheck() const
               return ERROR_INSANE;
             }
             // push all value into vector
-            for (int j=0; j<b.info.numkeys;j++) {
+            for (unsigned j=0; j<b.info.numkeys;j++) {
               rc = b.GetVal(j,value);
               if (rc) {return ERROR_INSANE;};
               v.insert(value);
@@ -764,7 +764,7 @@ ERROR_T BTreeIndex::SanityCheck() const
       }
 
       // iterate through v and check that values are in order
-      for (int i=0; i<v.size()-1; i++) {
+      for (unsigned i=0; i<v.size()-1; i++) {
         if (v[i] > v[i+1]) {
           return ERROR_INSANE;
         }
