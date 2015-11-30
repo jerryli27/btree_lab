@@ -1121,12 +1121,12 @@ ERROR_T BTreeIndex::SanityCheck() const
       std::set<SIZE_T> s; // contains the types of nodes in a level 
       std::vector<VALUE_T> v;
       for (unsigned i=0; i<Q.size(); i++) {
-        b.Unserialize(buffercache,Q.pop_front());
+        b.Unserialize(buffercache,Q.pop());
         s.insert(b.info.nodetype);
         switch (b.info.nodetype) {
           case BTREE_INTERIOR_NODE:
             // at least ceiling((n+1)/2) pointers in any interior node is actually used, where n is the max allowed key num for a block
-            if ((b.info.numkeys < (b.info.block_size+1)/2+1) or (not (rc=b.GetPtr(b.info.numkeys)))) {
+            if ((b.info.numkeys < (b.info.blocksize+1)/2+1) or (not (rc=b.GetPtr(b.info.numkeys)))) {
               return ERROR_INSANE;
             }
             // push all children into queue
@@ -1137,7 +1137,7 @@ ERROR_T BTreeIndex::SanityCheck() const
             }
           case BTREE_LEAF_NODE:
             // at least floor((n+1)/1) pointers in any leaf node is actually used to point to data records
-            if ((b.info.numkeys < (b.info.block_size+1)/2) or (not (rc=b.GetVal(b.info.numkeys)))) {
+            if ((b.info.numkeys < (b.info.blocksize+1)/2) or (not (rc=b.GetVal(b.info.numkeys)))) {
               return ERROR_INSANE;
             }
             // push all value into vector
