@@ -734,6 +734,10 @@ ERROR_T BTreeIndex::SanityCheck() const
         switch (b.info.nodetype) {
           case BTREE_INTERIOR_NODE:
             // at least ceiling((n+1)/2) pointers in any interior node is actually used, where n is the max allowed key num for a block
+            if ((b.info.numkeys < (b.info.block_size+1)/2+1) or (not (rc=b.GetPtr(b.info.numkeys)))) {
+              return ERROR_INSANE;
+            }
+            // push all children into queue
             for (offset=0;offset<b.info.numkeys;offset++) {
               rc = b.GetPtr(offset,ptr);
               if (rc) {return ERROR_INSANE;}
@@ -741,6 +745,10 @@ ERROR_T BTreeIndex::SanityCheck() const
             }
           case BTREE_LEAF_NODE:
             // at least floor((n+1)/1) pointers in any leaf node is actually used to point to data records
+            if ((b.info.numkeys < (b.info.block_size+1)/2) or (not (rc=b.GetVal(b.info.numkeys)))) {
+              return ERROR_INSANE;
+            }
+            // push all value into vector
             for (int j=0; j<b.info.numkeys;j++) {
               rc = b.GetVal(j,value);
               if (rc) {return ERROR_INSANE;};
@@ -766,95 +774,11 @@ ERROR_T BTreeIndex::SanityCheck() const
   return ERROR_NOERROR;
 }
 
-ERROR_T CheckBalanceAndOrder(SIZE_T &node, int prev_depth) {
-  BTreeNode b;
-  SIZE_T offset,
-  ERROR_T rc;
-  KEY_T testkey;
-  SIZE_T ptr;
-  std::queue<SIZE_T> Q;
-
-  rc= b.Unserialize(buffercache,node);
-
-  if (rc!=ERROR_NOERROR) { return rc; }
-
-  // push the 2nd level blocks into Q1
-  for (offset=0;offset<b.info.numkeys-1;offset++) { 
-    rc=b.GetKey(offset,testkey);
-    if (rc) {  return rc; }
-    Q.push(testkey);
-  }  
-  
-  bool terminate = false;
-  while (not terminate) {
-    // unserialize all nodes in the queue
-    // for every node, check if they are in the same 
-
-  }
-
-
-
-}
-
-// ERROR_T CheckBalance(SIZE_T &node, int prev_depth) {
-//   {
-//   BTreeNode b;
-//   SIZE_T offset,
-//   ERROR_T rc;
-//   KEY_T testkey;
-//   SIZE_T ptr;
-
-//   rc= b.Unserialize(buffercache,node);
-
-//   if (rc!=ERROR_NOERROR) { 
-//     return rc;
-//   }
-
-//   switch (b.info.nodetype) { 
-//   case BTREE_ROOT_NODE:
-//   case BTREE_INTERIOR_NODE:
-//     // go to the left-most child
-//     rc = b.GetPtr(0,ptr);
-//     if (rc) { return rc; }
-//     return CheckBalance(ptr,offset);
-//   case BTREE_LEAF_NODE:
-//     // first scan through all the data pointers and make sure they are in the same depth
-//     for (offset=0;offset<b.info.numkeys-1;offset++) { 
-//       rc=b.GetKey(offset,testkey);
-//       if (rc) {  return rc; }
-//       // get depth of testkey
-//       int depth;
-//       depth = GetDepth(superblock.info.rootnode, testkey);
-//       // if depth different from previous depth, return insane
-//       if (prev_depth == -1) {
-//         prev_depth = depth;
-//       } else if (depth != prev_depth) {
-//         return ERROR_INSANE;
-//       }
-//     }
-//     rc=b.GetPtr(b.info.numkeys,ptr);
-//     if (rc) { return rc; }
-//     // if reached last pointer, return no_error
-//     rc=b.Unserialize(buffercache,ptr);
-//     if (rc==ERROR_NOSUCHBLOCK) {return ERROR_NOERROR; }
-//     return CheckBalance(ptr,prev_depth);
-//   default:
-//     // We can't be looking at anything other than a root, internal, or leaf
-//     return ERROR_INSANE;
-//   }  
-
-//   return ERROR_INSANE;
-// }
-  
-
-// ERROR_T BTreeIndex::GetDepth(const SIZE_T &node, const KEY_T &key) {
-
-// }
-
 
 ostream & BTreeIndex::Print(ostream &os) const
 {
   // WRITE ME
+  Display(os, BTREE_DEPTH_DOT);
   return os;
 }
 
