@@ -1126,7 +1126,7 @@ ERROR_T BTreeIndex::SanityCheck() const
         switch (b.info.nodetype) {
           case BTREE_INTERIOR_NODE:
             // at least ceiling((n+1)/2) pointers in any interior node is actually used, where n is the max allowed key num for a block
-            if ((b.info.numkeys < (b.info.blocksize+1)/2+1) or (not (rc=b.GetPtr(b.info.numkeys)))) {
+            if ((b.info.numkeys < (b.info.blocksize+1)/2+1) or (not (rc=b.GetPtr(b.info.numkeys,ptr)))) {
               return ERROR_INSANE;
             }
             // push all children into queue
@@ -1137,14 +1137,14 @@ ERROR_T BTreeIndex::SanityCheck() const
             }
           case BTREE_LEAF_NODE:
             // at least floor((n+1)/1) pointers in any leaf node is actually used to point to data records
-            if ((b.info.numkeys < (b.info.blocksize+1)/2) or (not (rc=b.GetVal(b.info.numkeys)))) {
+            if ((b.info.numkeys < (b.info.blocksize+1)/2) or (not (rc=b.GetVal(b.info.numkeys,value)))) {
               return ERROR_INSANE;
             }
             // push all value into vector
             for (unsigned j=0; j<b.info.numkeys;j++) {
               rc = b.GetVal(j,value);
               if (rc) {return ERROR_INSANE;};
-              v.insert(value);
+              v.push_back(value);
             }
             continue;
         }
