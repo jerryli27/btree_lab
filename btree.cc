@@ -979,7 +979,7 @@ ERROR_T BTreeIndex::Insert(const KEY_T &key, const VALUE_T &value)
 ERROR_T BTreeIndex::Update(const KEY_T &key, const VALUE_T &value)
 {
   // WRITE ME
-  return ERROR_UNIMPL;
+  return LookupOrUpdateInternal(superblock.info.rootnode, BTREE_OP_UPDATE, key, value);
 }
 
   
@@ -1074,7 +1074,94 @@ ERROR_T BTreeIndex::Display(ostream &o, BTreeDisplayType display_type) const
 ERROR_T BTreeIndex::SanityCheck() const
 {
   // WRITE ME
-  return ERROR_UNIMPL;
+  // this function checks the following condition and returns ERROR_INSANE if any condition is false
+  // all paths from the root to a leaf have the same depth
+  // at least ceiling((n+1)/2) pointers in any interior node is actually used, where n is the max allowed key num for a block
+  // at least floor((n+1)/1) pointers in any leaf node is actually used to point to data records
+
+  BTreeNode b;
+  ERROR_T rc;
+  SIZE_T offset;
+  KEY_T testkey;
+  SIZE_T ptr;
+  VALUE_T value;
+  std::queue<SIZE_T> Q;
+
+  rc= b.Unserialize(buffercache,superblock.info.rootnode);
+
+  if (rc!=ERROR_NOERROR) { return rc; }
+
+  if (b.info.numkeys < 1) {
+    // check if only one pointer is used
+    rc=b.GetPtr(1,ptr);
+    if (rc) {
+      rc = b.GetPtr(0,ptr);
+      if (rc or ptr) {
+        return ERROR_INSANE;
+      }
+    }
+  }
+  else {
+    // push the 2nd level blocks into Q
+    for (offset=0;offset<b.info.numkeys;offset++) { 
+      rc=b.GetPtr(offset,ptr);
+      if (rc) {  return rc; }
+      Q.push(ptr);
+    }  
+    
+    bool terminate = false;
+    while (true) {
+      // unserialize all nodes in the queue
+      // for every node, check if they are the same type
+      // check if every node meets saturation rate limit
+      // push all their childrens into Q
+      // if all nodes are leaf, check if in order, then terminate
+      std::set<SIZE_T> s; // contains the types of nodes in a level 
+      std::vector<VALUE_T> v;
+      for (unsigned i=0; i<Q.size(); i++) {
+        b.Unserialize(buffercache,Q.pop_front());
+        s.insert(b.info.nodetype);
+        switch (b.info.nodetype) {
+          case BTREE_INTERIOR_NODE:
+            // at least ceiling((n+1)/2) pointers in any interior node is actually used, where n is the max allowed key num for a block
+            if ((b.info.numkeys < (b.info.block_size+1)/2+1) or (not (rc=b.GetPtr(b.info.numkeys)))) {
+              return ERROR_INSANE;
+            }
+            // push all children into queue
+            for (offset=0;offset<b.info.numkeys;offset++) {
+              rc = b.GetPtr(offset,ptr);
+              if (rc) {return ERROR_INSANE;}
+              Q.push(ptr);
+            }
+          case BTREE_LEAF_NODE:
+            // at least floor((n+1)/1) pointers in any leaf node is actually used to point to data records
+            if ((b.info.numkeys < (b.info.block_size+1)/2) or (not (rc=b.GetVal(b.info.numkeys)))) {
+              return ERROR_INSANE;
+            }
+            // push all value into vector
+            for (unsigned j=0; j<b.info.numkeys;j++) {
+              rc = b.GetVal(j,value);
+              if (rc) {return ERROR_INSANE;};
+              v.insert(value);
+            }
+            continue;
+        }
+      }
+
+      // if there are more than 1 type of nodes in a level, tree is insane
+      if (s.size() > 1) {
+        return ERROR_INSANE;
+      }
+
+      // iterate through v and check that values are in order
+      for (unsigned i=0; i<v.size()-1; i++) {
+        if (v[i] > v[i+1]) {
+          return ERROR_INSANE;
+        }
+      }
+    }
+  }
+  return ERROR_NOERROR;
 }
   
 
@@ -1082,6 +1169,7 @@ ERROR_T BTreeIndex::SanityCheck() const
 ostream & BTreeIndex::Print(ostream &os) const
 {
   // WRITE ME
+  Display(os, BTREE_DEPTH_DOT);
   return os;
 }
 
