@@ -3,6 +3,7 @@
 #include <iostream>
 #include <queue>
 #include <set>
+#include <stdlib.h>     /* malloc, free, rand */
 #include "btree.h"
 
 KeyValuePair::KeyValuePair()
@@ -156,9 +157,18 @@ ERROR_T BTreeIndex::Attach(const SIZE_T initblock, const bool create)
     SIZE_T ptr;
     rc=CreateLeafNode(ptr,superblock_index+1);
     if (rc) { return rc; }
+    newrootnode.info.numkeys=1;
     // Append the newleaf to the root's first pointer
     newrootnode.SetPtr(0,ptr);
-
+    //Special case. Set second pointer to -1 to indicate there's nothing in second pointer
+    newrootnode.SetPtr(1,0);
+    char * zerostr=(char*)malloc(superblock.info.keysize);
+    for (int i=0;i<superblock.info.keysize;i++){
+      zerostr[i]='\0';
+    }
+    Block tempBlock=Block(zerostr);
+    newrootnode.SetKey(0,tempBlock);
+    free(zerostr);
     rc=newrootnode.Serialize(buffercache,superblock_index+1);
 
     if (rc) { 
@@ -213,6 +223,16 @@ ERROR_T BTreeIndex::LookupOrUpdateInternal(const SIZE_T &node,
 
   switch (b.info.nodetype) { 
   case BTREE_ROOT_NODE:
+    //special case when there's only one pointer
+    if (b.info.numkeys==1) { 
+      rc=b.GetPtr(1,ptr);
+      if (rc) { return rc; }
+      if (ptr==0){
+        rc=b.GetPtr(0,ptr);
+        if (rc) { return rc; }
+        return LookupOrUpdateInternal(ptr,op,key,value);
+      }
+    }
   case BTREE_INTERIOR_NODE:
     // Scan through key/ptr pairs
     //and recurse if possible
@@ -249,7 +269,9 @@ ERROR_T BTreeIndex::LookupOrUpdateInternal(const SIZE_T &node,
 	} else { 
 	  // BTREE_OP_UPDATE
 	  // WRITE ME
-	  return ERROR_UNIMPL;
+    b.SetVal(offset,value);
+    b.Serialize(buffercache,node);
+	  return ERROR_NOERROR;
 	}
       }
     }
@@ -343,6 +365,8 @@ static ERROR_T PrintNode(ostream &os, SIZE_T nodenum, BTreeNode &b, BTreeDisplay
 	os << " ";
       }
     }
+    break;
+  case BTREE_SUPERBLOCK:
     break;
   default:
     if (dt==BTREE_DEPTH_DOT) { 
@@ -861,6 +885,20 @@ ERROR_T BTreeIndex::InsertHelper(const SIZE_T &node, const KEY_T &key, const VAL
     case BTREE_SUPERBLOCK:
       return InsertHelper(b.info.rootnode, key,value);
     case BTREE_ROOT_NODE:
+      //Handles special case
+      rc=b.GetPtr(1,ptr);
+      if (rc) {  return rc; }
+      //if there is nothing in the second pointer
+      if (ptr==0){
+        rc=b.GetPtr(0,ptr);
+        if (rc) { return rc; }
+        b.GetKey(0,testkey);
+        if (testkey<key){
+          b.SetKey(0,key);
+          b.Serialize(buffercache,node);
+        }
+        return InsertHelper(ptr, key,value);
+      }
     case BTREE_INTERIOR_NODE:
       // Scan through key/ptr pairs
       //and recurse if possible
@@ -904,14 +942,18 @@ ERROR_T BTreeIndex::InsertHelper(const SIZE_T &node, const KEY_T &key, const VAL
         if (rc) {  return rc; }
         // we've found the place to insert the key and value
         if (key<testkey || testkey==key) { 
+          if (testkey==key){
+            return ERROR_CONFLICT;
+          }
           //WRITE ME
-          if (b.info.GetNumSlotsAsLeaf()==b.info.numkeys){
+          else if (b.info.GetNumSlotsAsLeaf()==b.info.numkeys){
             return SplitLeaf(node,key,value);
           }else{
             //void * memmove ( void * destination, const void * source, size_t num );
-            memmove(b.ResolveKey(offset+1),b.ResolveKey(offset),(b.info.keysize+b.info.valuesize)*(b.info.numkeys-offset));
             // Move the memory after the insertion place one forward.
             b.info.numkeys++;
+            memmove(b.ResolveKey(offset+1),b.ResolveKey(offset),(b.info.keysize+b.info.valuesize)*(b.info.numkeys-1-offset));//-1 at the end because we've already added 1 previously
+            
             b.SetKey(offset,key);
             b.SetVal(offset,value);
           }
@@ -962,7 +1004,7 @@ ERROR_T BTreeIndex::Insert(const KEY_T &key, const VALUE_T &value)
   //            Make J the parent of xl and xr, and push j together with its child pointers(to xl) into the parent of x. 
   //std::cout<<"Step 1"<<std::endl;
   //std::cout<<"displaying node"<<std::endl;
-  Display(cerr , BTREE_DEPTH_DOT);
+  //Display(cerr , BTREE_DEPTH_DOT);
 
   //std::cout<<"displaying ends"<<std::endl;
   // BTreeNode b;
@@ -978,7 +1020,7 @@ ERROR_T BTreeIndex::Insert(const KEY_T &key, const VALUE_T &value)
 }
 
   
-ERROR_T BTreeIndex::Update(KEY_T key, VALUE_T value)
+ERROR_T BTreeIndex::Update(const KEY_T key, VALUE_T value)
 {
   // WRITE ME
   return LookupOrUpdateInternal(superblock.info.rootnode, BTREE_OP_UPDATE, key, value);
@@ -1045,6 +1087,7 @@ ERROR_T BTreeIndex::DisplayInternal(const SIZE_T &node,
     return ERROR_NOERROR;
     break;
   case BTREE_LEAF_NODE:
+  case BTREE_SUPERBLOCK:
     return ERROR_NOERROR;
     break;
   default:
