@@ -1,0 +1,23 @@
+OK
+FAIL
+FAIL
+FAIL
+Step 1
+displaying node
+displaying ends
+Step 2
+Step 3. Node: 0
+Step 2
+Step 3. Node: 1
+Special situation. Root Node: 2
+Step 2
+Step 3. Node: 2
+Step 4
+OK
+FAIL
+FAIL
+FAIL
+OK BEGIN DISPLAY
+OK END DISPLAY
+FAIL
+OK

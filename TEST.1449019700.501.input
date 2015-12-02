@@ -1,0 +1,11 @@
+INIT 16 16
+LOOKUP 0d5u2yn50qm0jo14  # should fail
+DISPLAY  # should always succeed
+UPDATE cqdtou85fjj7p2ec 7afnft5pjl1d1zh1  # should fail
+DISPLAY  # should always succeed
+INSERT ypvuwqwe8fql8mod 89u5f6xc8822uk8u  # should succeed
+INSERT n7b10vpx0cb1zekc yn0hff3tlsph0avr  # should succeed
+LOOKUP n7b10vpx0cb1zekc  # should succeed and return yn0hff3tlsph0avr
+INSERT ypvuwqwe8fql8mod r44d42ud306s58ur  # should fail
+UPDATE n7b10vpx0cb1zekc 5vi9fzz9xx4y8l2f  # should succeed
+DEINIT
