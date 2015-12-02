@@ -978,7 +978,7 @@ ERROR_T BTreeIndex::Insert(const KEY_T &key, const VALUE_T &value)
 }
 
   
-ERROR_T BTreeIndex::Update(const KEY_T &key, VALUE_T &value)
+ERROR_T BTreeIndex::Update(KEY_T key, VALUE_T value)
 {
   // WRITE ME
   return LookupOrUpdateInternal(superblock.info.rootnode, BTREE_OP_UPDATE, key, value);
@@ -1094,14 +1094,7 @@ ERROR_T BTreeIndex::SanityCheck() const
   if (rc!=ERROR_NOERROR) { return rc; }
 
   if (b.info.numkeys < 1) {
-    // check if only one pointer is used
-    rc=b.GetPtr(1,ptr);
-    if (rc) {
-      rc = b.GetPtr(0,ptr);
-      if (rc or ptr) {
-        return ERROR_INSANE;
-      }
-    }
+    return ERROR_NOERROR;
   }
   else {
     // push the 2nd level blocks into Q
@@ -1119,14 +1112,16 @@ ERROR_T BTreeIndex::SanityCheck() const
       // push all their childrens into Q
       // if all nodes are leaf, check if in order, then terminate
       std::set<SIZE_T> s; // contains the types of nodes in a level 
-      std::vector<VALUE_T> v;
+      std::queue<VALUE_T> v; // contains the values of all the leaf nodes
       for (unsigned i=0; i<Q.size(); i++) {
-        b.Unserialize(buffercache,Q.pop());
+        SIZE_T next = Q.front();  
+	Q.pop();
+        b.Unserialize(buffercache,next);
         s.insert(b.info.nodetype);
         switch (b.info.nodetype) {
           case BTREE_INTERIOR_NODE:
             // at least ceiling((n+1)/2) pointers in any interior node is actually used, where n is the max allowed key num for a block
-            if ((b.info.numkeys < (b.info.blocksize+1)/2+1) or (not (rc=b.GetPtr(b.info.numkeys,ptr)))) {
+            if ((b.info.numkeys < (b.info.blocksize+1)/2+1)) {
               return ERROR_INSANE;
             }
             // push all children into queue
@@ -1137,14 +1132,14 @@ ERROR_T BTreeIndex::SanityCheck() const
             }
           case BTREE_LEAF_NODE:
             // at least floor((n+1)/1) pointers in any leaf node is actually used to point to data records
-            if ((b.info.numkeys < (b.info.blocksize+1)/2) or (not (rc=b.GetVal(b.info.numkeys,value)))) {
+            if ((b.info.numkeys < (b.info.blocksize+1)/2)) {
               return ERROR_INSANE;
             }
             // push all value into vector
             for (unsigned j=0; j<b.info.numkeys;j++) {
               rc = b.GetVal(j,value);
               if (rc) {return ERROR_INSANE;};
-              v.push_back(value);
+              v.push(value);
             }
             continue;
         }
@@ -1156,11 +1151,17 @@ ERROR_T BTreeIndex::SanityCheck() const
       }
 
       // iterate through v and check that values are in order
-      for (unsigned i=0; i<v.size()-1; i++) {
-        if (v[i] > v[i+1]) {
-          return ERROR_INSANE;
+      while (v.size() > 1) {
+	VALUE_T v1 = v.front();
+	v.pop();
+	VALUE_T v2 = v.front();	
+	if (v2 < v1) {
+	  return ERROR_INSANE;
         }
       }
+
+
+
     }
   }
   return ERROR_NOERROR;
